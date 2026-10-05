@@ -1,0 +1,59 @@
+DotDock — instalación
+========================
+
+PASO 1 — Instalar
+-----------------
+Arrastra DotDock a la carpeta Aplicaciones (el atajo está aquí al lado).
+
+
+PASO 2 — Abrirlo la primera vez
+--------------------------------
+Ve a Aplicaciones y haz doble clic en DotDock.
+
+Aparecerá un aviso diciendo que "Apple no puede comprobar si contiene
+software malicioso". Es normal y NO significa que tenga nada malo: la app
+todavía no está registrada con Apple, que es un trámite de pago.
+
+Haz clic en "Listo" o "Cancelar" para cerrar ese aviso.
+
+
+PASO 3 — Autorizarla (sólo esta vez)
+-------------------------------------
+1. Abre el menú Apple ( ) arriba a la izquierda
+2. Entra en "Configuración del Sistema"
+3. En la lista de la izquierda, baja hasta "Privacidad y seguridad"
+4. Dentro, baja hasta el apartado "Seguridad"
+5. Verás un mensaje que menciona DotDock y un botón
+   "Abrir de todas formas". Haz clic ahí.
+6. Confirma con tu huella o tu contraseña de Mac
+7. Sale un último aviso: haz clic en "Abrir"
+
+Ya está. Sólo hay que hacerlo una vez; a partir de ahora abre normal.
+
+
+PASO 4 — Dar permiso a la música
+---------------------------------
+La primera vez que uses el reproductor te pedirá permiso para leer lo que
+suena en Spotify o Música. Acepta, o esa pestaña se quedará vacía.
+
+
+Cómo se usa
+-----------
+DotDock no aparece en el Dock: vive en la muesca, arriba de la pantalla.
+Acerca el cursor ahí y se despliega solo.
+
+Abajo del panel hay cinco herramientas: música, bandeja de archivos,
+portapapeles, temporizador y calculadora.
+
+El engrane de arriba a la derecha abre los ajustes.
+
+
+Para desinstalarlo
+------------------
+Arrastra DotDock de Aplicaciones a la Papelera. No deja nada más.
+
+
+¿Se atoró algo?
+---------------
+Dile a quien te pasó la app. Es una versión de prueba y el aviso del
+paso 2 desaparecerá cuando esté registrada con Apple.

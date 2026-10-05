@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Variante sandboxed, sólo para comprobar si la app sobrevive a las reglas de la
+	  Mac App Store. No se usa en la distribución con Developer ID.
+	  Se prueba con: make sandbox
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- El reproductor habla con Music y Spotify por AppleScript. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<array>
+		<string>com.spotify.client</string>
+		<string>com.apple.Music</string>
+	</array>
+
+	<!-- La bandeja recibe archivos que el usuario arrastra. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>
