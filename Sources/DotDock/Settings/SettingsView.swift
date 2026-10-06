@@ -393,21 +393,15 @@ private struct DotSettings: View {
                         .settingsFootnote()
                 }
 
-                Section("Por acciones") {
+                Section {
                     ForEach(BlobReaction.allCases) { reaction in
-                        Toggle(isOn: Binding(
-                            get: { settings.blobReactions.contains(reaction) },
-                            set: { settings.setReaction(reaction, enabled: $0) }
-                        )) {
-                            HStack(spacing: 10) {
-                                SettingsIcon(symbol: reaction.symbol, tint: .indigo)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(reaction.title)
-                                    Text(reaction.detail).settingsFootnote()
-                                }
-                            }
-                        }
+                        reactionRow(reaction)
                     }
+                } header: {
+                    Text("Por acciones")
+                } footer: {
+                    Text("Con ▶ ves en la muesca la expresión que hará.")
+                        .settingsFootnote()
                 }
 
                 Section("Comportamiento") {
@@ -438,6 +432,36 @@ private struct DotSettings: View {
         .onDisappear {
             holdsPose = false
             blob?.setDesignHold(false)
+        }
+    }
+
+    private func reactionRow(_ reaction: BlobReaction) -> some View {
+        HStack(spacing: 10) {
+            SettingsIcon(symbol: reaction.symbol, tint: .indigo)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(reaction.title)
+                Text(reaction.detail).settingsFootnote()
+            }
+
+            Spacer()
+
+            Button {
+                blob?.replayForDesign(mood: reaction.mood)
+            } label: {
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.indigo)
+            }
+            .buttonStyle(.borderless)
+            .help("Ver la expresión: \(reaction.detail.lowercased())")
+
+            Toggle("", isOn: Binding(
+                get: { settings.blobReactions.contains(reaction) },
+                set: { settings.setReaction(reaction, enabled: $0) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
         }
     }
 

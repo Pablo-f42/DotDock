@@ -167,6 +167,18 @@ enum BlobReaction: String, CaseIterable, Identifiable {
         }
     }
 
+    /// La expresión con la que sale.
+    var mood: BlobMood {
+        switch self {
+        case .music: .music
+        case .pomodoro: .happy
+        case .copy: .wink
+        case .shelf: .gulp
+        case .claude: .worried
+        case .welcome: .hello
+        }
+    }
+
     var symbol: String {
         switch self {
         case .music: "music.note"
