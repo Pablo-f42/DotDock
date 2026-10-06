@@ -15,7 +15,7 @@ final class DockStores: ObservableObject {
     let pomodoro = PomodoroTimer()
     let clipboard = ClipboardStore()
     let claude = ClaudeUsageStore()
-    let blob = BlobSettings()
+    let settings = AppSettings()
 
     /// Vive aquí y no en la vista para que la expresión sobreviva a cerrar y reabrir
     /// el panel, y para que sea la misma en todas las pantallas.
@@ -24,10 +24,28 @@ final class DockStores: ObservableObject {
 
     static let calculatorHistoryCapacity = 3
 
+    private var settingsObserver: AnyCancellable?
+
     func start() {
+        applySettings()
+        // `objectWillChange` llega antes de aplicar el cambio: se difiere un ciclo
+        // para leer el valor nuevo.
+        settingsObserver = settings.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] in self?.applySettings() }
+
         media.start()
         clipboard.start()
         claude.start()
+    }
+
+    /// Lleva a cada módulo lo que le toca de los ajustes.
+    private func applySettings() {
+        for phase in PomodoroPhase.allCases {
+            pomodoro.setMinutes(settings.minutes(for: phase), for: phase)
+        }
+        pomodoro.playsSound = settings.pomodoroSound
+        clipboard.capacity = settings.clipboardCapacity
     }
 
     /// Datos frescos en cuanto el panel se despliega, sin esperar al siguiente sondeo.

@@ -6,14 +6,6 @@ enum PomodoroPhase: String, CaseIterable {
     case shortBreak
     case longBreak
 
-    var duration: TimeInterval {
-        switch self {
-        case .focus: 25 * 60
-        case .shortBreak: 5 * 60
-        case .longBreak: 15 * 60
-        }
-    }
-
     var title: String {
         switch self {
         case .focus: "Concentración"
@@ -36,7 +28,7 @@ enum PomodoroPhase: String, CaseIterable {
 final class PomodoroTimer: ObservableObject {
 
     @Published private(set) var phase: PomodoroPhase = .focus
-    @Published private(set) var remaining: TimeInterval = PomodoroPhase.focus.duration
+    @Published private(set) var remaining: TimeInterval = 25 * 60
     @Published private(set) var isRunning = false
 
     /// Sesiones de concentración completadas en el ciclo actual.
@@ -50,8 +42,30 @@ final class PomodoroTimer: ObservableObject {
 
     private var timer: Timer?
 
+    /// Duración de cada fase. La fijan los ajustes.
+    private var durations: [PomodoroPhase: TimeInterval] = [
+        .focus: 25 * 60, .shortBreak: 5 * 60, .longBreak: 15 * 60
+    ]
+
+    var playsSound = true
+
+    func duration(of phase: PomodoroPhase) -> TimeInterval {
+        durations[phase] ?? 25 * 60
+    }
+
+    /// Cambiar la duración con la cuenta parada reinicia la fase a la nueva medida; en
+    /// marcha se respeta lo que lleva y aplica a la siguiente vez.
+    func setMinutes(_ minutes: Int, for phase: PomodoroPhase) {
+        let seconds = TimeInterval(max(minutes, 1) * 60)
+        guard durations[phase] != seconds else { return }
+
+        let wasPristine = !isRunning && remaining == duration(of: self.phase)
+        durations[phase] = seconds
+        if phase == self.phase, wasPristine { remaining = seconds }
+    }
+
     var progress: Double {
-        1 - (remaining / phase.duration)
+        1 - (remaining / duration(of: phase))
     }
 
     /// `mm:ss`, redondeando hacia arriba para que el último segundo se vea como 0:01
@@ -85,7 +99,7 @@ final class PomodoroTimer: ObservableObject {
     /// Reinicia la fase actual sin cambiar de fase ni perder el conteo del ciclo.
     func reset() {
         pause()
-        remaining = phase.duration
+        remaining = duration(of: phase)
     }
 
     func skip() {
@@ -95,7 +109,7 @@ final class PomodoroTimer: ObservableObject {
     /// Sólo para inspección: arranca con la cuenta ya avanzada, para poder capturar el
     /// indicador a media tarta sin esperar minutos.
     func debugStart(remainingFraction: Double) {
-        remaining = phase.duration * min(max(remainingFraction, 0), 1)
+        remaining = duration(of: phase) * min(max(remainingFraction, 0), 1)
         start()
     }
 
@@ -105,7 +119,7 @@ final class PomodoroTimer: ObservableObject {
         remaining -= 1
         guard remaining <= 0 else { return }
 
-        NSSound(named: "Glass")?.play()
+        if playsSound { NSSound(named: "Glass")?.play() }
         advance(countCompletion: true)
     }
 
@@ -125,6 +139,6 @@ final class PomodoroTimer: ObservableObject {
             phase = .focus
         }
 
-        remaining = phase.duration
+        remaining = duration(of: phase)
     }
 }

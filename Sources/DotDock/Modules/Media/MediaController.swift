@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import SwiftUI
 
 /// Sondea a los proveedores y publica el estado de reproducción para la UI.
 ///
@@ -10,7 +11,13 @@ import Foundation
 final class MediaController: ObservableObject {
 
     @Published private(set) var nowPlaying: NowPlaying?
-    @Published private(set) var artwork: NSImage?
+    @Published private(set) var artwork: NSImage? {
+        didSet { artworkColor = artwork.flatMap(Self.vividColor) }
+    }
+
+    /// El color más vivo de la carátula, ya aclarado para leerse sobre negro. `nil`
+    /// si la carátula es gris o no hay. Lo usa el visualizador.
+    @Published private(set) var artworkColor: Color?
 
     /// `true` si el usuario negó el permiso de Automatización. La UI lo usa para
     /// explicar por qué no hay datos en vez de fingir que no suena nada.
@@ -147,6 +154,54 @@ final class MediaController: ObservableObject {
     }
 
     // MARK: - Carátula
+
+    /// Reduce la imagen a 12×12 y se queda con el píxel más saturado y luminoso. El
+    /// promedio de una carátula casi siempre sale café o gris.
+    private static func vividColor(of image: NSImage) -> Color? {
+        let side = 12
+        guard
+            let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+            let context = CGContext(
+                data: nil,
+                width: side,
+                height: side,
+                bitsPerComponent: 8,
+                bytesPerRow: side * 4,
+                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else { return nil }
+
+        context.interpolationQuality = .medium
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+        guard let data = context.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
+
+        var best: NSColor?
+        var bestScore: CGFloat = 0
+
+        for index in 0..<(side * side) {
+            let offset = index * 4
+            let color = NSColor(
+                srgbRed: CGFloat(data[offset]) / 255,
+                green: CGFloat(data[offset + 1]) / 255,
+                blue: CGFloat(data[offset + 2]) / 255,
+                alpha: 1
+            )
+            let score = color.saturationComponent * color.brightnessComponent
+            if score > bestScore {
+                bestScore = score
+                best = color
+            }
+        }
+
+        guard let best, best.saturationComponent > 0.2 else { return nil }
+
+        return Color(
+            hue: best.hueComponent,
+            saturation: min(best.saturationComponent, 0.85),
+            brightness: max(best.brightnessComponent, 0.85)
+        )
+    }
 
     private func loadArtwork(for track: NowPlaying) {
         artwork = nil

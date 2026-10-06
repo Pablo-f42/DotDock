@@ -60,10 +60,6 @@ enum DockMetrics {
     static let hoverSlop: CGFloat = 4
     static let openHoverSlop: CGFloat = 60
 
-    /// Cuánto hay que sostener el cursor sobre el panel antes de que se despliegue.
-    /// Suficiente para no dispararse de paso camino a la barra de menús.
-    static let hoverOpenDelay: TimeInterval = 0.15
-
     /// Margen de gracia al salir. Sin esto, rozar el borde un instante mientras vas a
     /// pulsar un botón cierra el panel en la cara del usuario.
     static let closeGraceDelay: TimeInterval = 0.35
@@ -125,16 +121,27 @@ final class DockModel: ObservableObject {
 
         // `contentSize` depende del estado de reproducción, que vive en otro
         // ObservableObject: sin republicarlo aquí, la ventana no cambiaría de tamaño.
+        //
+        // La música sólo cuenta si los ajustes quieren carátula con el panel cerrado;
+        // el pomodoro se muestra siempre que corra.
         stores.media.$nowPlaying
             .map { $0?.isPlaying == true }
-            .combineLatest(stores.pomodoro.$isRunning)
-            .map { $0 || $1 }
+            .combineLatest(stores.settings.$showsLiveActivity, stores.pomodoro.$isRunning)
+            .map { playing, wantsMusic, pomodoro in (playing && wantsMusic) || pomodoro }
             .removeDuplicates()
             .sink { [weak self] isActive in
                 guard let self else { return }
                 withAnimation(DockMetrics.openAnimation) {
                     self.showsLiveActivity = isActive
                 }
+            }
+            .store(in: &cancellables)
+
+        // Si se apaga el módulo que estaba a la vista, se pasa al primero que quede.
+        stores.settings.$disabledModules
+            .sink { [weak self] disabled in
+                guard let self, disabled.contains(self.module) else { return }
+                self.module = stores.settings.visibleModules.first ?? .player
             }
             .store(in: &cancellables)
     }
@@ -237,7 +244,8 @@ final class DockModel: ObservableObject {
             pendingClose = nil
 
             if state == .closed { setState(.peek) }
-            if state == .peek { scheduleOpen() }
+            // En modo clic el cursor sólo lo agranda; desplegar es cosa del toque.
+            if state == .peek, stores.settings.openTrigger == .hover { scheduleOpen() }
         } else {
             pendingOpen?.cancel()
             pendingOpen = nil
@@ -255,10 +263,11 @@ final class DockModel: ObservableObject {
         setState(state == .open ? .closed : .open)
     }
 
-    func open(_ module: DockModule = .player) {
-        self.module = module
+    /// Abre en el módulo pedido o, sin pedir ninguno, en el que digan los ajustes.
+    func open(_ module: DockModule? = nil) {
+        if let module { self.module = module } else { applyStartModule() }
         cancelPending()
-        setState(.open)
+        setState(.open, applyingStartModule: false)
         stores.refreshOnOpen()
     }
 
@@ -276,7 +285,7 @@ final class DockModel: ObservableObject {
 
     private func scheduleOpen() {
         guard pendingOpen == nil else { return }
-        pendingOpen = schedule(after: DockMetrics.hoverOpenDelay) { [weak self] in
+        pendingOpen = schedule(after: stores.settings.hoverSpeed.delay) { [weak self] in
             guard let self else { return }
             self.pendingOpen = nil
             guard self.state == .peek else { return }
@@ -293,6 +302,19 @@ final class DockModel: ObservableObject {
         }
     }
 
+    /// El módulo de inicio se aplica al desplegar desde cerrado, no al reabrir porque
+    /// el cursor rozó el borde: eso cambiaría la pestaña bajo los dedos.
+    private var pendingStartModule: Bool { state == .closed || state == .peek }
+
+    private func applyStartModule() {
+        let settings = stores.settings
+        if let start = settings.startModule, settings.isModuleEnabled(start) {
+            module = start
+        } else if !settings.isModuleEnabled(module) {
+            module = settings.visibleModules.first ?? .player
+        }
+    }
+
     private func cancelPending() {
         pendingOpen?.cancel()
         pendingClose?.cancel()
@@ -306,9 +328,12 @@ final class DockModel: ObservableObject {
         return work
     }
 
-    private func setState(_ new: DockState) {
+    private func setState(_ new: DockState, applyingStartModule: Bool = true) {
         guard new != state else { return }
-        if new == .open { stores.refreshOnOpen() }
+        if new == .open {
+            stores.refreshOnOpen()
+            if applyingStartModule, pendingStartModule { applyStartModule() }
+        }
         if new != .closed { blob.hideNow() }
         let animation = new == .closed ? DockMetrics.closeAnimation : DockMetrics.openAnimation
         withAnimation(animation) { state = new }

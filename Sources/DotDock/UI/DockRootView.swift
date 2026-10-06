@@ -37,7 +37,7 @@ struct DockRootView: View {
                 .frame(width: size.width, height: size.height)
                 // Cuelga del borde inferior: su tope se alinea con el fondo de la muesca.
                 .overlay(alignment: .bottom) {
-                    BlobView(blob: model.blob)
+                    BlobView(blob: model.blob, settings: model.stores.settings)
                         .alignmentGuide(.bottom) { $0[.top] }
                 }
                 .shadow(color: .black.opacity(model.state == .open ? 0.5 : 0), radius: 20, y: 10)
@@ -80,7 +80,7 @@ struct DockRootView: View {
                         removal: .opacity.animation(.easeOut(duration: 0.08))
                     ))
 
-                ModuleSwitcher(selection: model.module, onSelect: model.select)
+                ModuleSwitcher(selection: model.module, settings: model.stores.settings, onSelect: model.select)
                     .background(
                         GeometryReader { proxy in
                             Color.clear.preference(key: TabBarWidthKey.self, value: proxy.size.width)
@@ -108,6 +108,7 @@ struct DockRootView: View {
             LiveActivityView(
                 media: model.stores.media,
                 pomodoro: model.stores.pomodoro,
+                settings: model.stores.settings,
                 isPlaying: model.stores.media.nowPlaying?.isPlaying == true || model.isDebugLiveActivity,
                 cutoutWidth: model.geometry.cutoutRect.width,
                 height: model.geometry.cutoutRect.height

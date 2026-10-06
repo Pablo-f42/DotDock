@@ -5,6 +5,7 @@ import SwiftUI
 struct BlobView: View {
 
     @ObservedObject var blob: BlobModel
+    @ObservedObject var settings: AppSettings
     @ObservedObject private var design = BlobDesign.shared
 
     var body: some View {
@@ -47,8 +48,20 @@ struct BlobView: View {
         let travel = BlobMetrics.gazeTravel
 
         return HStack(spacing: shape.eyeSpacing) {
-            BlobEye(mood: blob.mood, openness: blob.eyeOpenness, size: shape.eyeSize, isLeft: true)
-            BlobEye(mood: blob.mood, openness: blob.eyeOpenness, size: shape.eyeSize, isLeft: false)
+            BlobEye(
+                mood: blob.mood,
+                openness: blob.isWinking ? 0 : blob.eyeOpenness,
+                size: shape.eyeSize,
+                color: settings.blobEyeColor.color,
+                isLeft: true
+            )
+            BlobEye(
+                mood: blob.mood,
+                openness: blob.eyeOpenness,
+                size: shape.eyeSize,
+                color: settings.blobEyeColor.color,
+                isLeft: false
+            )
         }
         .offset(
             x: blob.gaze.width * travel.width
@@ -70,13 +83,14 @@ private struct BlobEye: View {
     let mood: BlobMood
     let openness: CGFloat
     let size: CGSize
+    let color: Color
     let isLeft: Bool
 
     var body: some View {
         if mood == .happy || mood == .music {
             // ^ ^ de alegría; ‿ ‿ de gusto, cerrados, al bailar.
             HappyArc()
-                .stroke(.white, style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
                 // El alto sale del ancho y no del alto del ojo: con ojos angostos
                 // el arco quedaba como una "v".
                 .frame(width: size.width + 2, height: min(size.height * 0.55, (size.width + 2) * 0.45))
@@ -86,11 +100,20 @@ private struct BlobEye: View {
                 .frame(width: size.width, height: size.height)
         } else {
             Capsule()
-                .fill(.white)
+                .fill(color)
                 .frame(width: size.width, height: size.height)
                 .mask(alignment: .top) { visibleArea }
-                .scaleEffect(mood == .startled ? 1.3 : 1)
+                .scaleEffect(scale)
                 .opacity(openness > 0.02 ? 1 : 0)
+        }
+    }
+
+    /// Abiertos de par en par al asustarse; un poco más grandes al saludar.
+    private var scale: CGFloat {
+        switch mood {
+        case .startled: 1.3
+        case .hello: 1.12
+        default: 1
         }
     }
 

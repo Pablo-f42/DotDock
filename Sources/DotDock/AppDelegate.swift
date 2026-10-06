@@ -1,5 +1,5 @@
 import AppKit
-import ServiceManagement
+import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -10,9 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// se duplica es la geometría y el estado abierto/cerrado.
     private var screens: [(model: DockModel, panel: DockPanel)] = []
     private var tracker: MouseTracker!
-    private var statusItem: NSStatusItem!
-    private var launchAtLoginItem: NSMenuItem!
-    private let blobDesignWindow = BlobDesignWindow()
+    private var statusItem: NSStatusItem?
+    private let settingsWindow = SettingsWindow()
+    private var cancellables = Set<AnyCancellable>()
 
     /// Mantiene viva la exclusión de App Nap mientras la app exista.
     private var activityToken: NSObjectProtocol?
@@ -37,8 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         rebuildScreens()
         stores.start()
-        setUpStatusItem()
         installEditMenu()
+        observeSettings()
 
         // El monitor es único y global: reparte la posición a todas las pantallas, y
         // cada una decide si el cursor cae sobre su panel.
@@ -68,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             $0.model.blob.stop()
             $0.panel.orderOut(nil)
         }
-        screens = NSScreen.screens.map { screen in
+        screens = screensToUse().map { screen in
             let model = DockModel(geometry: DockGeometry(screen: screen), stores: stores)
             model.showSettings = { [weak self] in self?.presentSettingsMenu() }
             return (model, DockPanel(model: model))
@@ -79,6 +79,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // que es la que estás mirando.
         blobHost?.blob.target = { [weak self] in self?.blobUnderCursor() }
         blobHost?.blob.start()
+    }
+
+    /// Las pantallas donde va un panel según los ajustes. Si se pide sólo la de la
+    /// muesca y no hay ninguna, se usa la principal: DotDock no puede desaparecer.
+    private func screensToUse() -> [NSScreen] {
+        guard stores.settings.screenPolicy == .cutoutOnly else { return NSScreen.screens }
+
+        let withCutout = NSScreen.screens.filter { DockGeometry(screen: $0).hasHardwareCutout }
+        if !withCutout.isEmpty { return withCutout }
+        return [DockGeometry.preferredScreen()].compactMap { $0 }
+    }
+
+    private func observeSettings() {
+        let settings = stores.settings
+
+        settings.$showsMenuBarIcon
+            .removeDuplicates()
+            .sink { [weak self] shows in self?.setStatusItemVisible(shows) }
+            .store(in: &cancellables)
+
+        settings.$screenPolicy
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildScreens() }
+            .store(in: &cancellables)
     }
 
     private func blobUnderCursor() -> BlobModel? {
@@ -97,8 +123,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///   DOTDOCK_DEBUG_EXPR="2+3*4"      siembra la calculadora
     ///   DOTDOCK_DEBUG_THEN=player       cambia de módulo a los 2,5 s
     ///   DOTDOCK_DEBUG_CLOSE=4           cierra el panel a los 4 s
-    ///   DOTDOCK_DEBUG_BLOB=normal|happy|sleepy|worried|music   la gotita se asoma ya
-    ///   DOTDOCK_DEBUG_BLOB=design                               abre el panel de diseño
+    ///   DOTDOCK_DEBUG_BLOB=normal|happy|sleepy|worried|music|wink|gulp|hello
+    ///                                   la gotita se asoma ya con ese ánimo
+    ///   DOTDOCK_DEBUG_SETTINGS=general|modules|music|dot|about   abre Ajustes ahí
     ///   DOTDOCK_DEBUG_TRACK="Título"    finge una canción sonando
     private func applyDebugMode() {
         let env = ProcessInfo.processInfo.environment
@@ -108,7 +135,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let mood = env["DOTDOCK_DEBUG_BLOB"] {
-            if mood == "design" { designBlob() } else { blobHost?.blob.debugPeek(mood: mood) }
+            blobHost?.blob.debugPeek(mood: mood)
+        }
+
+        if let raw = env["DOTDOCK_DEBUG_SETTINGS"] {
+            showSettings(SettingsSection(rawValue: raw))
         }
 
         guard let value = env["DOTDOCK_DEBUG_OPEN"] else {
@@ -148,37 +179,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func setUpStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = StatusIcon.make()
+    // MARK: - Barra de menús
+
+    /// El icono es opcional: el engrane del panel ofrece lo mismo.
+    private func setStatusItemVisible(_ visible: Bool) {
+        guard visible else {
+            if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
+            statusItem = nil
+            return
+        }
+        guard statusItem == nil else { return }
+
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = StatusIcon.make()
 
         let menu = NSMenu()
-        menu.addItem(
-            withTitle: "Abrir DotDock",
-            action: #selector(openPanel),
-            keyEquivalent: ""
-        ).target = self
-
+        menu.addItem(withTitle: "Abrir DotDock", action: #selector(openPanel), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Ajustes…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
-        menu.addItem(makeBlobMenuItem())
-        menu.addItem(.separator())
+        menu.addItem(withTitle: "Salir de DotDock", action: #selector(quit), keyEquivalent: "q").target = self
 
-        launchAtLoginItem = menu.addItem(
-            withTitle: "Arrancar al iniciar sesión",
-            action: #selector(toggleLaunchAtLogin),
-            keyEquivalent: ""
-        )
-        launchAtLoginItem.target = self
-
-        menu.addItem(.separator())
-        menu.addItem(
-            withTitle: "Salir de DotDock",
-            action: #selector(quit),
-            keyEquivalent: "q"
-        ).target = self
-
-        statusItem.menu = menu
-        refreshLaunchAtLoginItem()
+        item.menu = menu
+        statusItem = item
     }
 
     @objc private func openPanel() {
@@ -226,147 +248,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = main
     }
 
-    /// Menú del engrane del panel. Reutiliza los mismos ítems que el de la barra de
-    /// estado, y se despliega bajo el cursor.
+    /// Menú del engrane del panel: corto a propósito, la configuración vive en la
+    /// ventana de Ajustes.
     private func presentSettingsMenu() {
         let menu = NSMenu()
-
-        let launch = menu.addItem(
-            withTitle: "Arrancar al iniciar sesión",
-            action: #selector(toggleLaunchAtLogin),
-            keyEquivalent: ""
-        )
-        launch.target = self
-        launch.state = SMAppService.mainApp.status == .enabled ? .on : .off
-
-        menu.addItem(makeBlobMenuItem())
-
+        menu.addItem(withTitle: "Ajustes…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        menu.addItem(
-            withTitle: "Salir de DotDock",
-            action: #selector(quit),
-            keyEquivalent: ""
-        ).target = self
-
+        menu.addItem(withTitle: "Salir de DotDock", action: #selector(quit), keyEquivalent: "").target = self
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
-    // MARK: - Arranque al iniciar sesión
-
-    @objc private func toggleLaunchAtLogin() {
-        let service = SMAppService.mainApp
-
-        do {
-            if service.status == .enabled {
-                try service.unregister()
-            } else {
-                try service.register()
-            }
-        } catch {
-            presentLaunchAtLoginFailure(error)
-        }
-
-        refreshLaunchAtLoginItem()
+    @objc private func openSettings() {
+        showSettings(nil)
     }
 
-    private func refreshLaunchAtLoginItem() {
-        launchAtLoginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
-    }
-
-    /// El registro falla si la app corre desde una ruta que macOS considera inestable
-    /// — típicamente el directorio de build. De ahí el `make install`.
-    private func presentLaunchAtLoginFailure(_ error: Error) {
-        NSLog("DotDock: no se pudo cambiar el arranque automático: \(error)")
-
-        let alert = NSAlert()
-        alert.messageText = "No se pudo configurar el arranque automático"
-        alert.informativeText = """
-        macOS rechazó el registro: \(error.localizedDescription)
-
-        Suele pasar cuando la app corre desde la carpeta de compilación. \
-        Instálala con `make install` y vuelve a intentarlo desde /Applications.
-        """
-        alert.alertStyle = .warning
-
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
+    private func showSettings(_ section: SettingsSection?) {
+        // El panel se cierra: la ventana de Ajustes aparece en el centro y el panel
+        // abierto quedaría tapando la parte de arriba.
+        screens.forEach { $0.model.close() }
+        settingsWindow.show(section: section, stores: stores, blob: blobHost?.blob)
     }
 
     @objc private func quit() {
         NSApp.terminate(nil)
-    }
-
-    // MARK: - Gotita
-
-    /// El submenú se rellena al abrirse, para que las marcas reflejen siempre los
-    /// ajustes actuales aunque se hayan cambiado desde el otro menú.
-    private func makeBlobMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Gotita", action: nil, keyEquivalent: "")
-        let submenu = NSMenu(title: "Gotita")
-        submenu.delegate = self
-        item.submenu = submenu
-        return item
-    }
-
-    @objc private func toggleBlob() {
-        stores.blob.isEnabled.toggle()
-    }
-
-    /// El `tag` es el intervalo en minutos; 0 significa "en reposo".
-    @objc private func selectBlobTrigger(_ sender: NSMenuItem) {
-        stores.blob.trigger = sender.tag > 0 ? .every(minutes: sender.tag) : .resting
-        stores.blob.isEnabled = true
-    }
-
-    @objc private func designBlob() {
-        guard let blob = blobHost?.blob else { return }
-        blobDesignWindow.show(blob: blob)
-    }
-
-    @objc private func peekBlobNow() {
-        blobHost?.blob.peekWhenPossible(mood: nil, ignoringActivity: true)
-    }
-}
-
-extension AppDelegate: NSMenuDelegate {
-
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        let settings = stores.blob
-        menu.removeAllItems()
-
-        menu.addItem(
-            withTitle: "Mostrar gotita",
-            action: #selector(toggleBlob),
-            keyEquivalent: ""
-        ).state = settings.isEnabled ? .on : .off
-
-        menu.addItem(.separator())
-        menu.addItem(.sectionHeader(title: "Se asoma"))
-
-        let choices: [(title: String, tag: Int)] =
-            [("Cuando DotDock está en reposo", 0)]
-            + BlobSettings.intervalChoices.map { minutes in
-                (minutes == 1 ? "Cada minuto" : "Cada \(minutes) minutos", minutes)
-            }
-
-        for choice in choices {
-            let item = menu.addItem(
-                withTitle: choice.title,
-                action: #selector(selectBlobTrigger),
-                keyEquivalent: ""
-            )
-            item.tag = choice.tag
-
-            let selected = choice.tag > 0
-                ? settings.trigger == .every(minutes: choice.tag)
-                : settings.trigger == .resting
-            item.state = selected && settings.isEnabled ? .on : .off
-        }
-
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Asomarse ahora", action: #selector(peekBlobNow), keyEquivalent: "")
-        menu.addItem(withTitle: "Diseñar gotita…", action: #selector(designBlob), keyEquivalent: "")
-
-        menu.items.forEach { $0.target = self }
     }
 }

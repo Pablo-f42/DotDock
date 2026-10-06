@@ -30,7 +30,13 @@ final class ClipboardStore: ObservableObject {
 
     @Published private(set) var entries: [ClipboardEntry] = []
 
-    static let capacity = 5
+    /// Cuántas copias se guardan. La fijan los ajustes; al bajarla se recortan ya.
+    var capacity = 5 {
+        didSet {
+            guard entries.count > capacity else { return }
+            entries.removeLast(entries.count - capacity)
+        }
+    }
 
     /// Convención de nspasteboard.com: los gestores de contraseñas marcan así lo que
     /// nadie debería historizar. Respetarlo es la diferencia entre una herramienta y
@@ -82,8 +88,8 @@ final class ClipboardStore: ObservableObject {
             entries.removeAll { $0.text == text }
             entries.insert(ClipboardEntry(text: text, date: Date()), at: 0)
 
-            if entries.count > Self.capacity {
-                entries.removeLast(entries.count - Self.capacity)
+            if entries.count > capacity {
+                entries.removeLast(entries.count - capacity)
             }
         }
     }

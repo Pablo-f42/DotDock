@@ -8,13 +8,15 @@ import SwiftUI
 struct ModuleSwitcher: View {
 
     let selection: DockModule
+    @ObservedObject var settings: AppSettings
     let onSelect: (DockModule) -> Void
 
     @Namespace private var indicator
 
     var body: some View {
         HStack(spacing: 5) {
-            ForEach(DockModule.allCases) { module in
+            // Sólo los módulos activos, en el orden elegido en Ajustes.
+            ForEach(settings.visibleModules) { module in
                 ModuleTab(
                     module: module,
                     isSelected: module == selection,

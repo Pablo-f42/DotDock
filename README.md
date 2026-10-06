@@ -50,12 +50,20 @@ Si `make install` falla con un error de SDK, mira la sección *Toolchain* más a
 
 ### Primeros pasos
 
-- Acerca el cursor a la muesca y el panel se despliega. Para salir o configurar,
-  usa el icono de DotDock en la barra de menús o el engrane del panel.
+- Acerca el cursor a la muesca y el panel se despliega. El engrane del panel abre
+  **Ajustes** y tiene la opción de salir.
 - **Música:** la primera vez, el reproductor ofrece un botón para autorizar el
   acceso a Spotify o Música. macOS pide el permiso una sola vez.
-- **Arrancar al iniciar sesión:** actívalo desde el menú de DotDock.
-- **La gotita:** su submenú permite apagarla o elegir cada cuánto se asoma.
+- **Ajustes** tiene cinco secciones:
+  - **General:** arrancar al iniciar sesión, icono en la barra de menús (apagado
+    por defecto), abrir al pasar el cursor o con clic, y en qué pantallas aparece.
+  - **Módulos:** activar, desactivar y ordenar las pestañas; duración del
+    pomodoro; cuántas copias guarda el portapapeles.
+  - **Música:** carátula con el panel cerrado y estilo y color del visualizador,
+    incluido el color de la carátula que suena.
+  - **Dot:** cada cuánto se asoma la gotita, a qué acciones reacciona, cómo se
+    comporta y cómo se ve.
+  - **Acerca de:** versión y cómo actualizar.
 
 Para actualizar: `cd ~/Developer/DotDock && git pull && make install`.
 Para desinstalar: `cd ~/Developer/DotDock && make uninstall`.
@@ -79,8 +87,8 @@ make clean
 No usa Xcode ni SwiftPM: `swiftc` compila los fuentes y el Makefile arma el bundle a
 mano. Menos ceremonia y funciona sólo con Command Line Tools.
 
-La app corre como `LSUIElement` (sin icono en el Dock). Para salir, usa el ítem de la
-barra de menús o `make stop`.
+La app corre como `LSUIElement` (sin icono en el Dock). Para salir, usa el engrane
+del panel o `make stop`.
 
 ### Inspeccionar el panel abierto
 
@@ -103,16 +111,20 @@ screencapture -x -o -l<window-id> shot.png
 
 ```sh
 DOTDOCK_DEBUG_BLOB=normal  build/DotDock.app/Contents/MacOS/DotDock
-DOTDOCK_DEBUG_BLOB=happy   build/DotDock.app/Contents/MacOS/DotDock   # también sleepy, worried, music
+DOTDOCK_DEBUG_BLOB=happy   build/DotDock.app/Contents/MacOS/DotDock
+# también sleepy, worried, music, wink, gulp, hello
 ```
 
-Se asoma en cuanto arranca, con el ánimo pedido. Sus ajustes (activarla y cada cuánto
-sale) están en el submenú **Gotita** del engrane y de la barra de menús, junto con
-*Asomarse ahora*.
+Se asoma en cuanto arranca, con el ánimo pedido. En **Ajustes → Dot** hay una vista
+previa de cada ánimo y deslizadores para su forma, con la opción de dejarla asomada
+mientras se ajusta.
 
-**Diseñar gotita…** (en el mismo submenú, o `DOTDOCK_DEBUG_BLOB=design`) abre un panel
-provisional con deslizadores para el cuerpo y los ojos. La gotita se queda asomada
-mientras está abierto, y las medidas se guardan solas.
+### Abrir Ajustes en una sección
+
+```sh
+DOTDOCK_DEBUG_SETTINGS=dot build/DotDock.app/Contents/MacOS/DotDock
+# general, modules, music, dot, about
+```
 
 ## Repartir un .zip ya compilado
 
@@ -172,23 +184,31 @@ O instalando Xcode completo y apuntando ahí:
 
 ```
 Sources/DotDock/
-├── main.swift              Punto de entrada (NSApplication, .accessory)
-├── AppDelegate.swift       Ensambla modelo + panel + tracker + menú de estado
+├── DotDockApp.swift        Punto de entrada (NSApplication, .accessory)
+├── AppDelegate.swift       Ensambla paneles, tracker, menús y Ajustes
 ├── Core/
-│   ├── DockGeometry.swift Mide la muesca de cada pantalla
-│   └── DockModel.swift    Estado (closed/peek/open), medidas y animaciones
+│   ├── AppSettings.swift   Todas las preferencias, guardadas en UserDefaults
+│   ├── DockGeometry.swift  Mide la muesca de cada pantalla
+│   ├── DockModel.swift     Estado (closed/peek/open), medidas y animaciones
+│   ├── DockStores.swift    Datos compartidos entre pantallas
+│   └── Timers.swift        Temporizadores que no se congelan con menús abiertos
 ├── Window/
-│   ├── DockPanel.swift      NSPanel flotante sobre la barra de menús
-│   ├── DockHostingView.swift Hit-test: deja pasar los clics fuera del panel
+│   ├── DockPanel.swift       NSPanel flotante sobre la barra de menús
+│   ├── DockHostingView.swift Hit-test y destino de arrastre de la bandeja
 │   └── MouseTracker.swift    Monitores globales de NSEvent para el hover
 ├── UI/
-│   ├── DockShape.swift    Silueta con esquinas superiores cóncavas
-│   └── DockRootView.swift Raíz de SwiftUI
-└── Modules/
-    ├── DockModule.swift   Enum de paneles disponibles
-    ├── HomeView.swift      Panel por defecto
-    ├── ShelfStore.swift    Bandeja de archivos (drag & drop)
-    └── ShelfView.swift
+│   ├── DockRootView.swift    Raíz de SwiftUI
+│   ├── DockShape.swift       Silueta con esquinas superiores cóncavas
+│   ├── LiveActivityView.swift Carátula y visualizador con el panel cerrado
+│   ├── ModuleSwitcher.swift  Barra de pestañas
+│   ├── StatusIcon.swift      Icono de la barra de menús
+│   └── Theme.swift, PieProgress.swift
+├── Settings/
+│   ├── SettingsWindow.swift  Ventana de Ajustes
+│   └── SettingsView.swift    Sus cinco secciones
+├── Blob/                   Dot, la gotita: modelo, coreografía, dibujo y forma
+└── Modules/                Reproductor, bandeja, portapapeles, uso de Claude,
+                            pomodoro y calculadora
 ```
 
 ### Decisiones que importan

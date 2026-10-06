@@ -21,6 +21,12 @@ enum BlobMood: Equatable {
     case worried
     /// Suena música: baila con los ojos cerrados.
     case music
+    /// Copiaste algo: te guiña un ojo, como si lo guardara.
+    case wink
+    /// Soltaste un archivo en la bandeja: se lo traga.
+    case gulp
+    /// Volviste tras un rato fuera: te saluda.
+    case hello
     /// El cursor se le acercó.
     case startled
 }
@@ -49,20 +55,25 @@ final class BlobModel: ObservableObject {
     /// Avance de la nota musical que suelta al bailar, 0...1, y de qué lado sale.
     @Published private(set) var noteProgress: CGFloat = 1
     @Published private(set) var noteSide: CGFloat = 1
+    /// Cierra sólo el ojo izquierdo, para guiñar.
+    @Published private(set) var isWinking = false
 
     /// Dónde asomarse cuando toca. Lo instala el `AppDelegate` para que salga en la
     /// pantalla donde está el cursor; sin él, sale en la propia.
     var target: (() -> BlobModel?)?
 
     private unowned let dock: DockModel
-    private var settings: BlobSettings { dock.stores.blob }
+    private var settings: AppSettings { dock.stores.settings }
 
     private var isRunning = false
     private var isRetreating = false
     /// Quieta y asomada mientras el panel de diseño está abierto.
     private var isHeldForDesign = false
     private var lastCursorMove = Date.distantPast
-    private var lastMusicPeek = Date.distantPast
+    /// Última vez que salió por cada reacción. Sin respiro, copiar diez cosas
+    /// seguidas la sacaría diez veces.
+    private var lastReaction: [BlobReaction: Date] = [:]
+    private var lastIdle: TimeInterval = 0
     private var scheduler: Task<Void, Never>?
     private var performance: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
@@ -77,39 +88,94 @@ final class BlobModel: ObservableObject {
         guard !isRunning else { return }
         isRunning = true
 
-        settings.objectWillChange
+        // Sólo lo que afecta al horario lo reprograma; cambiar el color del
+        // visualizador no debería reiniciar la cuenta de la gotita.
+        Publishers.CombineLatest3(settings.$blobEnabled, settings.$blobTrigger, settings.$blobPersonality)
+            .dropFirst()
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.reschedule() }
+            .sink { [weak self] _ in self?.reschedule() }
             .store(in: &cancellables)
 
-        // Al terminar un pomodoro sale a celebrarlo, sin esperar a su turno. El
-        // segundo de espera deja que el panel recoja el live activity primero.
-        dock.stores.pomodoro.$lastFocusCompletion
+        observeReactions()
+        reschedule()
+    }
+
+    // MARK: - Reacciones
+
+    private func observeReactions() {
+        let stores = dock.stores
+
+        // Al terminar un pomodoro sale a celebrarlo. El segundo de espera deja que el
+        // panel recoja el live activity primero.
+        stores.pomodoro.$lastFocusCompletion
             .compactMap { $0 }
             .delay(for: .seconds(1.2), scheduler: RunLoop.main)
-            .sink { [weak self] _ in
-                guard let self, self.settings.isEnabled else { return }
-                self.peekWhenPossible(mood: .happy, ignoringActivity: true)
-            }
+            .sink { [weak self] _ in self?.react(.pomodoro, mood: .happy, cooldown: 0) }
             .store(in: &cancellables)
 
-        // Al empezar a sonar algo sale a bailar. Con un respiro entre veces: pausar y
-        // reanudar una canción no debería sacarla cada vez.
-        dock.stores.media.$nowPlaying
+        // Al empezar a sonar algo sale a bailar, pero no cada vez que pausas y
+        // reanudas la misma canción.
+        stores.media.$nowPlaying
             .map { $0?.isPlaying == true }
             .removeDuplicates()
             .filter { $0 }
             .delay(for: .seconds(1.5), scheduler: RunLoop.main)
-            .sink { [weak self] _ in
-                guard let self, self.settings.isEnabled,
-                      Date().timeIntervalSince(self.lastMusicPeek) > 600
-                else { return }
-                self.lastMusicPeek = Date()
-                self.peekWhenPossible(mood: .music, ignoringActivity: true)
-            }
+            .sink { [weak self] _ in self?.react(.music, mood: .music, cooldown: 600) }
             .store(in: &cancellables)
 
-        reschedule()
+        stores.clipboard.$entries
+            .map { $0.first?.id }
+            .removeDuplicates()
+            .dropFirst()
+            .filter { $0 != nil }
+            .sink { [weak self] _ in self?.react(.copy, mood: .wink, cooldown: 180) }
+            .store(in: &cancellables)
+
+        // Sale cuando el panel ya se cerró: soltar el archivo lo abre.
+        let shelfCount = stores.shelf.items.count
+        stores.shelf.$items
+            .map(\.count)
+            .dropFirst()
+            .scan((shelfCount, shelfCount)) { ($0.1, $1) }
+            .filter { $0.1 > $0.0 }
+            .sink { [weak self] _ in self?.react(.shelf, mood: .gulp, cooldown: 30) }
+            .store(in: &cancellables)
+
+        stores.claude.$session
+            .map { ($0.percent ?? 0) >= 80 }
+            .removeDuplicates()
+            .filter { $0 }
+            .sink { [weak self] _ in self?.react(.claude, mood: .worried, cooldown: 1800) }
+            .store(in: &cancellables)
+
+        // Volver tras diez minutos sin tocar el Mac: se nota porque el tiempo
+        // inactivo cae de golpe.
+        Timer.publish(every: 5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.checkWelcomeBack() }
+            .store(in: &cancellables)
+    }
+
+    private func react(_ reaction: BlobReaction, mood: BlobMood, cooldown: TimeInterval) {
+        guard settings.reacts(to: reaction) else { return }
+        if let last = lastReaction[reaction], Date().timeIntervalSince(last) < cooldown { return }
+
+        lastReaction[reaction] = Date()
+        peekWhenPossible(mood: mood, ignoringActivity: true)
+    }
+
+    private func checkWelcomeBack() {
+        let idle = Self.idleSeconds()
+        defer { lastIdle = idle }
+
+        if lastIdle > 600, idle < 10 {
+            react(.welcome, mood: .hello, cooldown: 0)
+        }
+    }
+
+    private static func idleSeconds() -> TimeInterval {
+        // ~0 es `kCGAnyInputEventType`: cualquier teclado o ratón.
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
     }
 
     func stop() {
@@ -121,7 +187,7 @@ final class BlobModel: ObservableObject {
 
     private func reschedule() {
         scheduler?.cancel()
-        guard isRunning, settings.isEnabled else {
+        guard isRunning, settings.blobEnabled else {
             hideNow()
             return
         }
@@ -132,15 +198,15 @@ final class BlobModel: ObservableObject {
                 try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled, let self else { return }
 
-                let resting = self.settings.trigger == .resting
+                let resting = self.settings.blobTrigger == .resting
                 self.peekWhenPossible(mood: nil, ignoringActivity: !resting)
             }
         }
     }
 
     private func nextDelay() -> TimeInterval {
-        switch settings.trigger {
-        case .resting: .random(in: 120...300)
+        switch settings.blobTrigger {
+        case .resting: .random(in: settings.blobPersonality.restingDelay)
         case .every(let minutes): TimeInterval(minutes * 60)
         }
     }
@@ -173,7 +239,8 @@ final class BlobModel: ObservableObject {
     /// Ver `DOTDOCK_DEBUG_BLOB`.
     func debugPeek(mood name: String) {
         let moods: [String: BlobMood] = [
-            "happy": .happy, "sleepy": .sleepy, "worried": .worried, "music": .music
+            "happy": .happy, "sleepy": .sleepy, "worried": .worried, "music": .music,
+            "wink": .wink, "gulp": .gulp, "hello": .hello
         ]
         peek(mood: moods[name] ?? .normal)
     }
@@ -220,6 +287,7 @@ final class BlobModel: ObservableObject {
         gaze = .zero
         lean = 0
         noteProgress = 1
+        isWinking = false
         isRetreating = false
         isPresent = true
 
@@ -268,6 +336,35 @@ final class BlobModel: ObservableObject {
         case .music:
             guard await dance(beats: 8) else { return }
 
+        case .wink:
+            guard await look(0, hold: 0.4) else { return }
+            withAnimation(.easeIn(duration: 0.08)) { isWinking = true }
+            guard await pause(0.45) else { return }
+            withAnimation(.easeOut(duration: 0.12)) { isWinking = false }
+            guard await hop(), await pause(0.6) else { return }
+
+        case .gulp:
+            // Se estira como abriendo la boca, traga de golpe con los ojos
+            // apretados y queda contenta.
+            withAnimation(.easeOut(duration: 0.2)) { reach = 1.3 }
+            guard await pause(0.25) else { return }
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.6)) {
+                reach = 0.8
+                eyeOpenness = 0
+            }
+            guard await pause(0.3) else { return }
+            mood = .happy
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                reach = 1
+                eyeOpenness = 1
+            }
+            guard await pause(0.9) else { return }
+
+        case .hello:
+            guard await hop(), await hop(), await look(0, hold: 0.3),
+                  await blink(), await blink(), await pause(0.6)
+            else { return }
+
         case .startled:
             break
         }
@@ -305,6 +402,14 @@ final class BlobModel: ObservableObject {
 
         withAnimation(.easeInOut(duration: 0.3)) { lean = 0 }
         return await pause(0.4)
+    }
+
+    /// Un saltito: se estira un poco y rebota.
+    private func hop() async -> Bool {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) { reach = 1.15 }
+        guard await pause(0.2) else { return false }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reach = 1 }
+        return await pause(0.3)
     }
 
     private var restingOpenness: CGFloat {
@@ -380,11 +485,12 @@ final class BlobModel: ObservableObject {
     func cursorMoved(to point: CGPoint) {
         guard isPresent, !isRetreating else { return }
 
-        if !isHeldForDesign, distance(to: point) < BlobMetrics.shyDistance {
+        if !isHeldForDesign, settings.blobIsShy, distance(to: point) < BlobMetrics.shyDistance {
             startle()
             return
         }
 
+        guard settings.blobFollowsCursor else { return }
         lastCursorMove = Date()
 
         let center = blobCenter
@@ -448,11 +554,7 @@ final class BlobModel: ObservableObject {
             return .worried
         }
 
-        // ~0 es `kCGAnyInputEventType`: cualquier teclado o ratón.
-        let idle = CGEventSource.secondsSinceLastEventType(
-            .combinedSessionState,
-            eventType: CGEventType(rawValue: ~0)!
-        )
+        let idle = Self.idleSeconds()
         let hour = Calendar.current.component(.hour, from: Date())
         if idle > 180 || hour >= 23 || hour < 6 {
             return .sleepy
