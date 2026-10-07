@@ -65,8 +65,35 @@ Si `make install` falla con un error de SDK, mira la sección *Toolchain* más a
     comporta y cómo se ve.
   - **Acerca de:** versión y cómo actualizar.
 
-Para actualizar: `cd ~/Developer/DotDock && git pull && make install`.
-Para desinstalar: `cd ~/Developer/DotDock && make uninstall`.
+### Actualizar
+
+Tus ajustes se conservan al actualizar. La versión que tienes aparece en
+**Ajustes → Acerca de**.
+
+En la Terminal:
+
+```sh
+cd ~/Developer/DotDock && git pull && make install
+```
+
+O pídeselo a Claude Code o Codex CLI:
+
+```text
+Actualiza la app DotDock que tengo en ~/Developer/DotDock: entra a la carpeta,
+haz git pull y ejecuta make install. Si make install falla por un SDK o
+compilador de Swift incompatible, sigue la sección "Toolchain" del README y
+vuelve a intentarlo. Al terminar, confirma que DotDock está corriendo
+(pgrep -x DotDock) y dime qué versión quedó instalada según
+/Applications/DotDock.app/Contents/Info.plist.
+```
+
+`make install` cierra la versión que esté abierta, instala la nueva y la abre.
+
+### Desinstalar
+
+```sh
+cd ~/Developer/DotDock && make uninstall
+```
 
 ## Requisitos para desarrollar
 

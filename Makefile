@@ -1,5 +1,5 @@
 APP_NAME  := DotDock
-VERSION   := 0.1.0
+VERSION   := 0.2.0
 BUILD_DIR := build
 APP       := $(BUILD_DIR)/$(APP_NAME).app
 BIN       := $(APP)/Contents/MacOS/$(APP_NAME)
