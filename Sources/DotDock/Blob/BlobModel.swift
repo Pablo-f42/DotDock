@@ -62,8 +62,11 @@ final class BlobModel: ObservableObject {
     /// pantalla donde está el cursor; sin él, sale en la propia.
     var target: (() -> BlobModel?)?
 
-    private unowned let dock: DockModel
-    private var settings: AppSettings { dock.stores.settings }
+    /// Débil a propósito: al reconectar pantallas el panel se rehace, y si algo
+    /// retuviera a esta gotita no debe poder tocar un panel que ya no existe.
+    private weak var dock: DockModel?
+    private let stores: DockStores
+    private var settings: AppSettings { stores.settings }
 
     private var isRunning = false
     private var isRetreating = false
@@ -80,6 +83,7 @@ final class BlobModel: ObservableObject {
 
     init(dock: DockModel) {
         self.dock = dock
+        self.stores = dock.stores
     }
 
     // MARK: - Programación
@@ -103,7 +107,7 @@ final class BlobModel: ObservableObject {
     // MARK: - Reacciones
 
     private func observeReactions() {
-        let stores = dock.stores
+        let stores = self.stores
 
         // Al terminar un pomodoro sale a celebrarlo. El segundo de espera deja que el
         // panel recoja el live activity primero.
@@ -230,7 +234,7 @@ final class BlobModel: ObservableObject {
     }
 
     private func canPeek(ignoringActivity: Bool) -> Bool {
-        guard !isPresent, !isHeldForDesign, dock.state == .closed else { return false }
+        guard let dock, !isPresent, !isHeldForDesign, dock.state == .closed else { return false }
         if !ignoringActivity, dock.showsLiveActivity { return false }
         return distance(to: NSEvent.mouseLocation) > BlobMetrics.shyDistance * 2
     }
@@ -278,6 +282,8 @@ final class BlobModel: ObservableObject {
     // MARK: - Coreografía
 
     private func peek(mood forced: BlobMood?) {
+        // Una gotita cuyo panel ya no existe no tiene dónde asomarse.
+        guard dock != nil else { return }
         performance?.cancel()
 
         mood = forced ?? currentMood()
@@ -509,6 +515,7 @@ final class BlobModel: ObservableObject {
 
     /// Rect de la gotita asomada en coordenadas globales de AppKit.
     private var blobRect: CGRect {
+        guard let dock else { return .null }
         let cutoutRect = dock.geometry.cutoutRect
         let top = cutoutRect.maxY - dock.contentSize.height
         let shape = BlobDesign.shared.proportions
@@ -534,6 +541,7 @@ final class BlobModel: ObservableObject {
 
     /// Un sitio al azar a lo largo del borde inferior, lejos de las esquinas redondas.
     private func randomOffset() -> CGFloat {
+        guard let dock else { return 0 }
         let half = dock.contentSize.width / 2
             - DockMetrics.closedBottomRadius
             - BlobDesign.shared.proportions.frameWidth / 2
@@ -542,7 +550,7 @@ final class BlobModel: ObservableObject {
     }
 
     private func currentMood() -> BlobMood {
-        let stores = dock.stores
+        let stores = self.stores
 
         if let done = stores.pomodoro.lastFocusCompletion, Date().timeIntervalSince(done) < 600 {
             return .happy

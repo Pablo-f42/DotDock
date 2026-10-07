@@ -266,7 +266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // El panel se cierra: la ventana de Ajustes aparece en el centro y el panel
         // abierto quedaría tapando la parte de arriba.
         screens.forEach { $0.model.close() }
-        settingsWindow.show(section: section, stores: stores, blob: blobHost?.blob)
+        settingsWindow.show(section: section, stores: stores) { [weak self] in self?.blobHost?.blob }
     }
 
     @objc private func quit() {

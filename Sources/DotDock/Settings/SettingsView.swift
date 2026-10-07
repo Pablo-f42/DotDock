@@ -6,7 +6,7 @@ struct SettingsView: View {
     @ObservedObject var navigation: SettingsNavigation
     @ObservedObject var settings: AppSettings
     @ObservedObject var media: MediaController
-    let blob: BlobModel?
+    let blob: () -> BlobModel?
 
     var body: some View {
         NavigationSplitView {
@@ -341,7 +341,7 @@ private struct DotSettings: View {
 
     @ObservedObject var settings: AppSettings
     @ObservedObject private var design = BlobDesign.shared
-    let blob: BlobModel?
+    let blob: () -> BlobModel?
 
     @State private var previewMood: BlobMood = .normal
     @State private var holdsPose = false
@@ -361,11 +361,11 @@ private struct DotSettings: View {
                     Picker("Vista previa", selection: $previewMood) {
                         ForEach(Self.previewMoods, id: \.mood) { Text($0.title).tag($0.mood) }
                     }
-                    Button("Asomarse") { blob?.replayForDesign(mood: previewMood) }
+                    Button("Asomarse") { blob()?.replayForDesign(mood: previewMood) }
                 }
 
                 Toggle("Mantenerla asomada mientras ajustas", isOn: $holdsPose)
-                    .onChange(of: holdsPose) { _, hold in blob?.setDesignHold(hold) }
+                    .onChange(of: holdsPose) { _, hold in blob()?.setDesignHold(hold) }
             }
 
             Group {
@@ -431,7 +431,7 @@ private struct DotSettings: View {
         .formStyle(.grouped)
         .onDisappear {
             holdsPose = false
-            blob?.setDesignHold(false)
+            blob()?.setDesignHold(false)
         }
     }
 
@@ -447,7 +447,7 @@ private struct DotSettings: View {
             Spacer()
 
             Button {
-                blob?.replayForDesign(mood: reaction.mood)
+                blob()?.replayForDesign(mood: reaction.mood)
             } label: {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 18))

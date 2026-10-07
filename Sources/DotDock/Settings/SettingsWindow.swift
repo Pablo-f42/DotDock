@@ -55,9 +55,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
     private let navigation = SettingsNavigation()
-    private var blob: BlobModel?
+    /// La gotita se pide cada vez y no se guarda: los paneles se rehacen al cambiar
+    /// las pantallas, y una referencia vieja apuntaría a una gotita sin panel.
+    private var blob: () -> BlobModel? = { nil }
 
-    func show(section: SettingsSection? = nil, stores: DockStores, blob: BlobModel?) {
+    func show(section: SettingsSection? = nil, stores: DockStores, blob: @escaping () -> BlobModel?) {
         if let section { navigation.section = section }
         self.blob = blob
 
@@ -77,7 +79,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                     navigation: navigation,
                     settings: stores.settings,
                     media: stores.media,
-                    blob: blob
+                    blob: { [weak self] in self?.blob() }
                 )
             )
             window.center()
@@ -90,6 +92,6 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     /// Al cerrar, la gotita deja de posar.
     func windowWillClose(_ notification: Notification) {
-        blob?.setDesignHold(false)
+        blob()?.setDesignHold(false)
     }
 }
