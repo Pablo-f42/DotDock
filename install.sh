@@ -120,6 +120,9 @@ build() {
     local sdk
     sdk=$(pick_sdk)
     say "Compilando (uno o dos minutos)…"
+    # Siempre desde cero: un intento fallido anterior o un cambio de SDK dejan restos
+    # que make daría por buenos.
+    rm -rf "$SRC/build"
     if [ -n "$sdk" ]; then
         make -C "$SRC" install INSTALLED="$dest/DotDock.app" SDK="$sdk" 2>&1 | tee "$log"
     else

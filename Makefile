@@ -29,13 +29,18 @@ ENTITLEMENTS := Resources/$(APP_NAME).entitlements
 
 all: $(APP)
 
+# El bundle se arma sólo cuando ya compiló todo. Si se creara antes y la compilación
+# fallara, quedaría una carpeta vacía más nueva que los fuentes, make la daría por
+# buena en el siguiente intento e instalaría una app rota.
 $(APP): $(SOURCES) Resources/Info.plist $(ICON)
-	@mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
+	@rm -rf $(APP)
+	@mkdir -p $(BUILD_DIR)
 	@for arch in $(ARCHS); do \
 		echo "  compilando $$arch"; \
 		swiftc $(SWIFT_FLAGS) -target $$arch-apple-$(DEPLOYMENT) \
 			-o $(BUILD_DIR)/$(APP_NAME)-$$arch $(SOURCES) || exit 1; \
 	done
+	@mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	@lipo -create -output $(BIN) $(addprefix $(BUILD_DIR)/$(APP_NAME)-,$(ARCHS))
 	@rm -f $(addprefix $(BUILD_DIR)/$(APP_NAME)-,$(ARCHS))
 	@cp Resources/Info.plist $(APP)/Contents/Info.plist
