@@ -65,6 +65,9 @@ struct ClaudeUsageView: View {
             Text(detail)
                 .font(Theme.Typo.caption)
                 .foregroundStyle(Theme.Ink.tertiary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 20)
         }
         .frame(width: 420, height: 100)
     }
@@ -74,15 +77,18 @@ struct ClaudeUsageView: View {
     static func icon(_ issue: PlanRead?) -> String {
         switch issue {
         case .notInstalled: "questionmark.app.dashed"
-        case .unreadable: "person.crop.circle.badge.exclamationmark"
+        case .loggedOut: "person.crop.circle.badge.exclamationmark"
+        case .cannotRun: "exclamationmark.octagon"
         default: "exclamationmark.triangle"
         }
     }
 
     static func title(_ issue: PlanRead?) -> String {
         switch issue {
-        case .notInstalled: "Claude Code no está instalado"
-        case .unreadable: "Sesión de Claude Code cerrada"
+        case .notInstalled: "No se encontró Claude Code"
+        case .loggedOut: "Sesión de Claude Code cerrada"
+        case .cannotRun: "Claude Code no pudo arrancar"
+        case .unreadable: "Claude Code no dio el informe de uso"
         case .failed: "No se pudo consultar el uso"
         case .ok, nil: "Consultando el uso…"
         }
@@ -90,8 +96,11 @@ struct ClaudeUsageView: View {
 
     static func detail(_ issue: PlanRead?) -> String {
         switch issue {
-        case .notInstalled: "Este módulo necesita el CLI de Claude Code"
-        case .unreadable: "Abre Claude Code y ejecuta /login"
+        case .notInstalled: "Instálalo, o revisa que `which claude` responda en la Terminal"
+        case .loggedOut: "Abre Claude Code en la Terminal y ejecuta /login"
+        // El mensaje real del CLI: con él se sabe qué falta sin adivinar.
+        case .cannotRun(let message): "Dijo: \(message)"
+        case .unreadable(let message): "Respondió: \(message)"
         case .failed: "Reintentando en unos segundos"
         case .ok, nil: "Un momento"
         }
