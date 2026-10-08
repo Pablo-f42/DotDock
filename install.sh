@@ -65,13 +65,13 @@ fi
 # --- 3. Código ---------------------------------------------------------------
 
 if [ -d "$SRC/.git" ]; then
-    say "Actualizando el código en $SRC…"
+    say "Actualizando el código en ${SRC}…"
     git -C "$SRC" pull --ff-only \
         || fail "No se pudo actualizar $SRC. Si cambiaste archivos ahí, guárdalos aparte o borra la carpeta y vuelve a intentarlo."
 elif [ -e "$SRC" ]; then
     fail "$SRC ya existe y no es una copia de DotDock. Muévela o bórrala y vuelve a intentarlo."
 else
-    say "Descargando el código en $SRC…"
+    say "Descargando el código en ${SRC}…"
     mkdir -p "$(dirname "$SRC")"
     git clone --depth 1 "$REPO_URL" "$SRC" || fail "No se pudo descargar el código. ¿Hay conexión a internet?"
 fi
