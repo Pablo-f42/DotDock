@@ -83,21 +83,60 @@ fi
 dest="/Applications"
 [ -w "$dest" ] || { dest="$HOME/Applications"; mkdir -p "$dest"; }
 
+# Versión de Swift como número comparable: "6.3.2" → 603.
+swift_number() {
+    local major minor
+    IFS=. read -r major minor _ <<< "$1"
+    echo $(( major * 100 + ${minor:-0} ))
+}
+
+# Elige el SDK con el que compilar. Las herramientas de Apple traen varios, y el más
+# nuevo a veces lo hizo un Swift más reciente que el compilador instalado: entonces
+# no compila ("this SDK is not supported by the compiler"). Se recorren del más
+# nuevo al más viejo y gana el primero hecho con un Swift que este compilador
+# entiende. Cada SDK dice con qué Swift se hizo en su Swift.swiftinterface.
+pick_sdk() {
+    local compiler sdk_dir sdk interface built
+    compiler=$(xcrun swiftc --version 2>&1 | sed -n 's/.*Apple Swift version \([0-9.]*\).*/\1/p' | head -1)
+    [ -n "$compiler" ] || return
+
+    sdk_dir=$(dirname "$(xcrun --show-sdk-path)")
+    for sdk in $(for path in "$sdk_dir"/MacOSX[0-9]*.sdk; do
+                     [ -d "$path" ] || continue
+                     name=${path##*/MacOSX}
+                     echo "${name%.sdk} $path"
+                 done | sort -V -r | cut -d' ' -f2-); do
+        interface=$(ls "$sdk"/usr/lib/swift/Swift.swiftmodule/*.swiftinterface 2>/dev/null | head -1)
+        built=$(sed -n 's/.*swift-compiler-version: Apple Swift version \([0-9.]*\).*/\1/p' "$interface" 2>/dev/null | head -1)
+        [ -n "$built" ] || continue
+        if [ "$(swift_number "$built")" -le "$(swift_number "$compiler")" ]; then
+            echo "$sdk"
+            return
+        fi
+    done
+}
+
 build() {
+    local sdk
+    sdk=$(pick_sdk)
     say "Compilando (uno o dos minutos)…"
-    make -C "$SRC" install INSTALLED="$dest/DotDock.app" 2>&1 | tee "$log"
+    if [ -n "$sdk" ]; then
+        make -C "$SRC" install INSTALLED="$dest/DotDock.app" SDK="$sdk" 2>&1 | tee "$log"
+    else
+        make -C "$SRC" install INSTALLED="$dest/DotDock.app" 2>&1 | tee "$log"
+    fi
 }
 
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
 if ! build; then
-    # El fallo conocido: herramientas viejas cuyo compilador no coincide con el SDK.
+    # Ningún SDK le sirve al compilador: hay que actualizar las herramientas.
     if grep -q "SDK is not supported by the compiler" "$log"; then
         label=$(softwareupdate --list 2>/dev/null | sed -n 's/^\* Label: \(Command Line Tools.*\)$/\1/p' | tail -1)
         [ -n "$label" ] || fail "Las herramientas de desarrollo están desactualizadas. Actualízalas en Ajustes del Sistema → General → Actualización de software y vuelve a intentarlo."
 
-        say "Las herramientas de desarrollo están desactualizadas y hay que poner «$label»."
+        say "Las herramientas de desarrollo están desactualizadas. Hay que instalar: ${label}"
         ask "¿Actualizarlas ahora? Te pedirá la contraseña de tu Mac." \
             || fail "Actualízalas en Ajustes del Sistema → General → Actualización de software y vuelve a intentarlo."
         sudo softwareupdate -i "$label" < /dev/tty || fail "No se pudieron actualizar las herramientas."
