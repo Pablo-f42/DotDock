@@ -541,7 +541,7 @@ private struct DotSettings: View {
 private struct AboutSettings: View {
 
     private static let repository = URL(string: "https://github.com/Pablo-f42/DotDock")!
-    private static let updateCommand = "cd ~/Developer/DotDock && git pull && make install"
+    private static let updateCommand = "curl -fsSL https://raw.githubusercontent.com/Pablo-f42/DotDock/main/install.sh | bash"
 
     @State private var copied = false
 
@@ -584,7 +584,7 @@ private struct AboutSettings: View {
             } header: {
                 Text("Actualizar")
             } footer: {
-                Text("Pégalo en la Terminal. Si clonaste el proyecto en otra carpeta, cambia la ruta.")
+                Text("Pégalo en la Terminal y pulsa Enter. Descarga la última versión y la abre; tus ajustes se conservan.")
                     .settingsFootnote()
             }
 

@@ -1,5 +1,5 @@
 APP_NAME  := DotDock
-VERSION   := 0.2.2
+VERSION   := 0.2.3
 BUILD_DIR := build
 APP       := $(BUILD_DIR)/$(APP_NAME).app
 BIN       := $(APP)/Contents/MacOS/$(APP_NAME)
@@ -61,11 +61,13 @@ stop:
 clean:
 	@rm -rf $(BUILD_DIR)
 
+# INSTALLED se puede cambiar al llamar: install.sh lo usa para instalar en
+# ~/Applications cuando el usuario no puede escribir en /Applications.
 # El arranque al iniciar sesión sólo funciona desde una ruta estable: macOS rechaza
 # registrar un bundle que vive en un directorio de compilación.
 install: all stop
 	@rm -rf $(INSTALLED)
-	@cp -R $(APP) /Applications/
+	@ditto $(APP) $(INSTALLED)
 	@codesign --force --deep --sign - $(INSTALLED)
 	@open $(INSTALLED)
 	@echo "Instalado en $(INSTALLED)"

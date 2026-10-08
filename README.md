@@ -10,43 +10,39 @@ se asoma.
 Necesitas **macOS 14 o superior**. Funciona en Apple Silicon e Intel. En Macs sin
 muesca, el panel aparece como una pastilla negra arriba al centro.
 
-La app se compila en tu Mac a partir del código, así que macOS no la bloquea como
-app de "desarrollador no identificado".
+### La forma fácil
 
-### Opción A: pídeselo a tu asistente de terminal
-
-Abre **Claude Code** (`claude`) o **Codex CLI** (`codex`) en la Terminal y pega
-este prompt. Tiene que ser un asistente que pueda ejecutar comandos: el chat web de
-Claude o ChatGPT no puede instalar nada en tu Mac.
-
-```text
-Instala la app DotDock en mi Mac compilándola desde su código fuente:
-
-1. Comprueba que tengo macOS 14 o superior (sw_vers) y las Command Line Tools
-   de Xcode (xcode-select -p). Si faltan, ejecuta xcode-select --install, avísame
-   y espera a que termine la instalación antes de seguir.
-2. Clona https://github.com/Pablo-f42/DotDock.git en ~/Developer/DotDock.
-   Si la carpeta ya existe, entra y haz git pull.
-3. Lee el README.md del proyecto, sobre todo la sección "Toolchain".
-4. Ejecuta make install. Si falla por un SDK o compilador de Swift incompatible,
-   sigue lo que dice la sección "Toolchain" y vuelve a intentarlo.
-5. Confirma que /Applications/DotDock.app existe y que la app está corriendo
-   (pgrep -x DotDock).
-
-No uses sudo ni cambies nada fuera de esa carpeta sin preguntarme antes. Al
-terminar, dime qué hiciste y cómo se usa la app.
-```
-
-### Opción B: a mano
+Abre la app **Terminal** (búscala con ⌘ + espacio), pega esta línea y pulsa Enter:
 
 ```sh
-xcode-select --install          # sólo si nunca instalaste las Command Line Tools
-git clone https://github.com/Pablo-f42/DotDock.git ~/Developer/DotDock
-cd ~/Developer/DotDock
-make install                    # compila, copia a /Applications y la abre
+curl -fsSL https://raw.githubusercontent.com/Pablo-f42/DotDock/main/install.sh | bash
 ```
 
-Si `make install` falla con un error de SDK, mira la sección *Toolchain* más abajo.
+El script hace todo solo:
+
+1. Si faltan las herramientas de desarrollo de Apple, abre su instalador. Pulsa
+   **Instalar**, acepta la licencia y deja la Terminal abierta: tardan entre 5 y
+   20 minutos en bajar y el script sigue en cuanto terminan.
+2. Descarga el código en `~/Developer/DotDock`, o lo actualiza si ya estaba.
+3. Compila la app, la instala en Aplicaciones y la abre.
+
+La app se compila en tu Mac, así que macOS la abre sin avisos de "desarrollador no
+identificado". Si ya tienes las herramientas, tarda uno o dos minutos.
+
+### Compilar a mano
+
+Lo mismo que hace el script, paso a paso. Necesitas las Command Line Tools de Xcode: si
+nunca las instalaste, ejecuta primero `xcode-select --install` y espera a que
+termine.
+
+```sh
+git clone https://github.com/Pablo-f42/DotDock.git ~/Developer/DotDock
+cd ~/Developer/DotDock
+make install
+```
+
+`make install` compila, copia a /Applications y abre la app. Si falla con un error
+de SDK, mira la sección *Toolchain* más abajo.
 
 ### Primeros pasos
 
@@ -70,30 +66,21 @@ Si `make install` falla con un error de SDK, mira la sección *Toolchain* más a
 Tus ajustes se conservan al actualizar. La versión que tienes aparece en
 **Ajustes → Acerca de**.
 
-En la Terminal:
+Pega en la Terminal la misma línea de la instalación:
 
 ```sh
-cd ~/Developer/DotDock && git pull && make install
+curl -fsSL https://raw.githubusercontent.com/Pablo-f42/DotDock/main/install.sh | bash
 ```
 
-O pídeselo a Claude Code o Codex CLI:
+Cierra la versión abierta, instala la nueva y la abre. El comando también está en
+**Ajustes → Acerca de**, con un botón para copiarlo.
 
-```text
-Actualiza la app DotDock que tengo en ~/Developer/DotDock: entra a la carpeta,
-haz git pull y ejecuta make install. Si make install falla por un SDK o
-compilador de Swift incompatible, sigue la sección "Toolchain" del README y
-vuelve a intentarlo. Al terminar, confirma que DotDock está corriendo
-(pgrep -x DotDock) y dime qué versión quedó instalada según
-/Applications/DotDock.app/Contents/Info.plist.
-```
-
-`make install` cierra la versión que esté abierta, instala la nueva y la abre.
+Si prefieres hacerlo a mano: `cd ~/Developer/DotDock && git pull && make install`.
 
 ### Desinstalar
 
-```sh
-cd ~/Developer/DotDock && make uninstall
-```
+Cierra DotDock desde el engrane del panel → Salir y arrastra DotDock desde
+Aplicaciones a la papelera.
 
 ## Requisitos para desarrollar
 

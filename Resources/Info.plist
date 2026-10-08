@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleName</key>
-	<string>DotDock</string>
 	<key>CFBundleDisplayName</key>
 	<string>DotDock</string>
 	<key>CFBundleExecutable</key>
@@ -12,21 +10,21 @@
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.faz.dotdock</string>
+	<key>CFBundleName</key>
+	<string>DotDock</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.2</string>
+	<string>0.2.3</string>
 	<key>CFBundleVersion</key>
-	<string>4</string>
+	<string>5</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<!-- Sin icono en el Dock ni en el conmutador de apps: vive en la muesca de la pantalla. -->
 	<key>LSUIElement</key>
 	<true/>
-	<!-- Sin esta clave macOS mata la app al primer AppleScript, sin diálogo. -->
 	<key>NSAppleEventsUsageDescription</key>
 	<string>DotDock necesita este permiso para mostrar y controlar lo que estás reproduciendo en Música y Spotify.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 </dict>
 </plist>
