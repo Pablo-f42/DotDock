@@ -1,2 +1,6 @@
 build/
 .DS_Store
+
+# Configuración y notas locales de Claude Code
+.claude/
+CLAUDE.local.md
